@@ -1,50 +1,95 @@
+# Android Studio / IntelliJ IDEA
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
-
-# Gradle files
+.idea/
 .gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+
+# Build outputs
 build/
+*/build/
+out/
+.cxx/
 
-# Local configuration file (sdk path, etc)
+# Local configuration files
 local.properties
+gradle.properties.local
 
-# Log/OS Files
+# Logs
 *.log
 
-# Android Studio generated files and folders
+# Android generated files
+.navigation/
 captures/
 .externalNativeBuild/
-.cxx/
 *.aab
 *.apk
 output-metadata.json
 
-# IntelliJ
-*.iml
-.idea/
-misc.xml
-deploymentTargetDropDown.xml
-render.experimental.xml
-
-# Keystore files
+# Keystore files (SECURITY)
 *.jks
 *.keystore
+release.properties
+signing.properties
 
-# Google Services (e.g. APIs or Firebase)
+# Google Services & Firebase
 google-services.json
+firebase.json
+.firebase/
 
-# Android Profiling
+# Machine Learning Models (Large files)
+*.tflite
+*.onnx
+*.pb
+models/
+ml_models/
+training_data/
+
+# ARCore & Computer Vision temp files
+arcore_session/
+ar_cache/
+opencv_cache/
+pose_detection_cache/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
+
+# Profiling
 *.hprof
+*.trace
+
+# NDK
+obj/
+.externalNativeBuild/
+
+# Version control
+.svn/
+
+# Package files (for distribution)
+*.tar.gz
+*.rar
+*.zip
+
+# Test results
+test-results/
+androidTest-results/
+
+# Lint
+lint-results.xml
+lint-results.html
+
+# Backup files
+*.bak
+*.backup
