@@ -80,7 +80,7 @@ Estabelecer fundações sólidas para desenvolvimento escalável
 
 ---
 
-### 🏗️ **DIA 2** - 31/07/2025 ✅ COMPLETO
+### 🏗️ **DIA 2** - 03/08/2025 ✅ COMPLETO
 
 #### **🎯 Objetivo:**
 Criar Domain Layer completo com entidades, repository interfaces e use cases
@@ -147,7 +147,7 @@ domain/
 
 ---
 
-### 📱 **DIA 3** - 01/08/2025 📋 PLANEJADO
+### 📱 **DIA 3** - ??/08/2025 📋 PLANEJADO
 
 #### **🎯 Objetivos:**
 - Implementar Data Layer (Repository implementations)
@@ -175,7 +175,7 @@ data/
 
 ---
 
-### 🎨 **DIA 4** - 02/08/2025 📋 PLANEJADO
+### 🎨 **DIA 4** - ??/08/2025 📋 PLANEJADO
 
 #### **🎯 Objetivos:**
 - Presentation Layer básico com ViewModels
