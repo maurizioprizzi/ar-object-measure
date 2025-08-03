@@ -267,5 +267,5 @@ data/
 
 ---
 
-**📝 Última Atualização:** 31/07/2025 - Fim do Dia 2  
-**🚀 Próxima Atualização:** 01/08/2025 - Fim do Dia 3
+**📝 Última Atualização:** 03/08/2025 - Fim do Dia 2  
+**🚀 Próxima Atualização:** ??/08/2025 - Fim do Dia 3
