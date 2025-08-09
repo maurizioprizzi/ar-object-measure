@@ -3,12 +3,15 @@ package com.objectmeasure.ar.domain.usecase
 import com.objectmeasure.ar.domain.model.DetectedObject
 import com.objectmeasure.ar.domain.model.ObjectType
 import com.objectmeasure.ar.domain.repository.BoundingBox
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Use Case para validar se um objeto detectado é adequado para medição
  * DIA 2: Primeiro use case implementando regras de negócio
  */
-class ValidateObjectUseCase {
+@Singleton
+class ValidateObjectUseCase @Inject constructor() {
 
     /**
      * Valida se um objeto detectado pode ser medido com confiança
