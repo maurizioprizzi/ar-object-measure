@@ -11,6 +11,7 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
@@ -21,3 +22,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "ARObjectMeasure"
 include(":app")
+
+// Ativa execução paralela para builds mais rápidos
+gradle.settingsEvaluated {
+    gradle.startParameter.isParallelProjectExecutionEnabled = true
+}
