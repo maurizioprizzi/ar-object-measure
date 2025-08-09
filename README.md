@@ -6,8 +6,9 @@
 [![Kotlin](https://img.shields.io/badge/Language-Kotlin-blue.svg)](https://kotlinlang.org)
 [![API](https://img.shields.io/badge/API-24%2B-brightgreen.svg)](https://android-arsenal.com/api?level=24)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-24%20Passing-brightgreen.svg)](#testing-strategy)
+[![Tests](https://img.shields.io/badge/Tests-33%20Passing-brightgreen.svg)](#testing-strategy)
 [![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg)](#testing-strategy)
+[![Hilt](https://img.shields.io/badge/DI-Hilt-orange.svg)](#architecture)
 
 ## 🎯 Overview
 
@@ -44,8 +45,8 @@ AR Object Measure is an innovative Android application that uses **Augmented Rea
 ### **Android Libraries**
 - **CameraX** - Modern camera API
 - **Room** - Local database
-- **Hilt** - Dependency injection
-- **Coroutines + Flow** - Asynchronous programming
+- **Hilt** - Dependency injection ✅
+- **Coroutines + Flow** - Asynchronous programming ✅
 - **Retrofit** - Network requests
 
 ## 📋 Requirements
@@ -77,33 +78,37 @@ cd ar-object-measure
 
 ### **Run Tests**
 ```bash
-# Run unit tests
+# Run all unit tests
 ./gradlew testDebugUnitTest
 
 # Run instrumented tests
 ./gradlew connectedDebugAndroidTest
 
-# Run domain layer tests specifically
+# Run specific layer tests
 ./gradlew test --tests "com.objectmeasure.ar.domain.*"
+./gradlew test --tests "com.objectmeasure.ar.data.*"
+./gradlew test --tests "com.objectmeasure.ar.integration.*"
 ```
 
 ## 🏗️ Architecture
 
-This project follows **Clean Architecture** principles with **MVVM** pattern:
+This project follows **Clean Architecture** principles with **MVVM** pattern and **Hilt** dependency injection:
 
 ```
 app/
 ├── presentation/     # UI Layer (Activities, Fragments, ViewModels)
-│   ├── ui/          # Compose screens
+│   ├── ui/          # Compose screens [NEXT: Day 4]
 │   └── viewmodel/   # ViewModels
 ├── domain/ ✅       # Business Logic Layer [IMPLEMENTED]
 │   ├── model/       # Entities (DetectedObject, Measurements)
 │   ├── repository/  # Repository interfaces
 │   └── usecase/     # Use cases (ValidateObjectUseCase)
-├── data/            # Data Layer [NEXT: Day 3]
+├── data/ ✅         # Data Layer [IMPLEMENTED]
 │   ├── repository/  # Repository implementations
-│   ├── datasource/  # Data sources (local/remote)
+│   ├── datasource/  # Data sources (CacheDataSource)
 │   └── mapper/      # Data mappers
+├── di/ ✅           # Dependency Injection [IMPLEMENTED]
+│   └── DataModule   # Hilt modules
 └── core/            # Shared utilities
     └── util/        # Extension functions, constants
 ```
@@ -115,26 +120,34 @@ The domain layer is fully implemented with:
 - **Use cases** encapsulating business logic
 - **19 unit tests** with 100% coverage
 
+### **Data Layer (Complete ✅)**
+The data layer is implemented with:
+- **Repository implementations** with cache and fallback strategies
+- **Reactive cache** using Kotlin Flow and StateFlow
+- **Dependency injection** connecting all components
+- **9 unit + integration tests** validating functionality
+
 > 📖 **Architecture Details:** See [ARCHITECTURE.md](ARCHITECTURE.md) for comprehensive design patterns documentation
 
 ## 📊 Development Status
 
-- **Current Phase:** Domain Layer Complete ✅
-- **Progress:** 7% (Day 2 of 30 completed)
-- **Next Milestone:** Data Layer Implementation
+- **Current Phase:** Data Layer Complete ✅
+- **Progress:** 10% (Day 3 of 30 completed)
+- **Next Milestone:** Presentation Layer Implementation
 
 ### **Roadmap**
 - [x] **Day 1:** Clean Architecture Foundation ✅
 - [x] **Day 2:** Domain Layer (Models, Use Cases, Repository Interfaces) ✅
-- [ ] **Day 3-4:** Data Layer Implementation  
-- [ ] **Day 5-7:** Presentation Layer + Basic UI
-- [ ] **Week 2:** Camera integration + ARCore setup
-- [ ] **Week 3:** ML Kit integration + Object detection
-- [ ] **Week 4:** Measurement algorithms + UI polish
+- [x] **Day 3:** Data Layer + Dependency Injection ✅
+- [ ] **Day 4-5:** Presentation Layer + Basic UI
+- [ ] **Day 6-7:** Camera integration + ARCore setup
+- [ ] **Week 2:** ML Kit integration + Object detection
+- [ ] **Week 3:** Measurement algorithms + Advanced UI
+- [ ] **Week 4:** Testing + Performance optimization
 
 ### **Architecture Progress**
 - **✅ Domain Layer:** 100% complete (5 classes, 19 tests)
-- **🔄 Data Layer:** 0% (starting Day 3)
+- **✅ Data Layer:** 85% complete (3 classes, 9 tests) - missing ARCore integration
 - **🔄 Presentation Layer:** 0% (starting Day 4)
 
 > 📝 **Detailed progress:** See [DIARY.md](DIARY.md) for daily development log
@@ -142,15 +155,27 @@ The domain layer is fully implemented with:
 ## 🧪 Testing Strategy
 
 - **Unit Tests:** Business logic and utilities ✅
-- **Integration Tests:** Repository and use case layers (Day 3)
+- **Integration Tests:** Repository and use case layers ✅
 - **UI Tests:** Compose components and user flows (Day 4+)
 - **AR Tests:** ARCore functionality and measurements (Week 2+)
 
 ### **Current Testing Status**
-- **Total Tests:** 24 (5 core utils + 19 domain layer)
+- **Total Tests:** 33 (5 core + 19 domain + 9 data/integration)
 - **Coverage:** 100% for implemented layers
 - **Build Status:** All tests passing ✅
-- **Coverage Goal:** >90% for all layers
+- **Test Categories:** Unit (24) + Integration (9)
+- **Coverage Goal:** >90% for all layers ✅
+
+### **Test Commands**
+```bash
+# All tests
+./gradlew test
+
+# By layer
+./gradlew test --tests "com.objectmeasure.ar.domain.*"      # 19 tests
+./gradlew test --tests "com.objectmeasure.ar.data.*"       # 7 tests  
+./gradlew test --tests "com.objectmeasure.ar.integration.*" # 2 tests
+```
 
 ## 📱 Measurement Accuracy
 
@@ -170,6 +195,26 @@ The application recognizes and measures the following object types:
 - **🪑 Chair/Table** - Furniture dimensions
 
 Each measurement includes confidence scoring and validation rules implemented in the domain layer.
+
+## ⚡ Technical Highlights
+
+### **Clean Architecture Implementation**
+- **Zero dependencies** between layers (domain is framework-agnostic)
+- **Repository pattern** abstracting data sources
+- **Use cases** encapsulating business rules
+- **Dependency inversion** via interfaces
+
+### **Reactive Programming**
+- **Kotlin Flow** for reactive data streams
+- **StateFlow** for reactive cache implementation
+- **Coroutines** for asynchronous operations
+- **Flow-based** repository operations
+
+### **Dependency Injection**
+- **Hilt** for compile-time dependency injection
+- **Singleton** scoped components
+- **Automatic binding** of interfaces to implementations
+- **Testable** architecture with easy mocking
 
 ## 🤝 Contributing
 
@@ -193,6 +238,7 @@ This is a learning/portfolio project, but suggestions and feedback are welcome!
 - [ML Kit Pose Detection](https://developers.google.com/ml-kit/vision/pose-detection)
 - [Clean Architecture Guide](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
 - [Android Architecture Components](https://developer.android.com/topic/architecture)
+- [Hilt Dependency Injection](https://developer.android.com/training/dependency-injection/hilt-android)
 
 ## 📄 License
 
@@ -207,5 +253,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <p align="center">
-  <i>Built with ❤️ using Clean Architecture, TDD, and modern Android development practices</i>
+  <i>Built with ❤️ using Clean Architecture, TDD, Hilt DI, and modern Android development practices</i>
 </p>
