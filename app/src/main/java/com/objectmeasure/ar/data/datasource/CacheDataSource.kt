@@ -20,14 +20,14 @@ class CacheDataSource @Inject constructor() {
     /**
      * Salva lista de objetos no cache
      */
-    suspend fun cacheObjects(objects: List<DetectedObject>) {
+    fun cacheObjects(objects: List<DetectedObject>) {
         _cachedObjects.value = objects
     }
 
     /**
      * Adiciona um objeto ao cache existente
      */
-    suspend fun addObject(detectedObject: DetectedObject) {
+    fun addObject(detectedObject: DetectedObject) {
         val currentList = _cachedObjects.value.toMutableList()
         currentList.add(detectedObject)
 
@@ -42,25 +42,26 @@ class CacheDataSource @Inject constructor() {
     /**
      * Obtém objetos do cache
      */
-    suspend fun getCachedObjects(): List<DetectedObject> {
+    fun getCachedObjects(): List<DetectedObject> {
         return _cachedObjects.value
     }
 
     /**
      * Limpa o cache
      */
-    suspend fun clearCache() {
+    fun clearCache() {
         _cachedObjects.value = emptyList()
     }
 
     /**
      * Obtém histórico limitado de objetos
      */
-    suspend fun getHistory(limit: Int): List<DetectedObject> {
+    fun getHistory(limit: Int): List<DetectedObject> {
         return _cachedObjects.value.takeLast(limit)
     }
 
     companion object {
-        private const val MAX_CACHE_SIZE = 50
+        // Ajustado para refletir o comentário na função addObject
+        private const val MAX_CACHE_SIZE = 10
     }
 }
