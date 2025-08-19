@@ -2,18 +2,18 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.dagger.hilt.android")
+    alias(libs.plugins.hilt) // Use alias instead of string
     alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "com.objectmeasure.ar"
-    compileSdk = 36
+    compileSdk = 36 // 36 might be too new, try 35
 
     defaultConfig {
         applicationId = "com.objectmeasure.ar"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 36 // Match with compileSdk
         versionCode = 1
         versionName = "1.0"
 
@@ -23,19 +23,17 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true // Habilita minificação no release
-            isShrinkResources = true // Remove recursos não usados
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
         debug {
-            // Garante build mais rápido no debug
             isMinifyEnabled = false
         }
     }
-
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -52,11 +50,11 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true // Explicitly enable BuildConfig
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = libs.versions.kotlin.get()
-    }
+    // Remove composeOptions since you're using kotlin-compose plugin
+    // The plugin handles this automatically
 
     packaging {
         resources.excludes += setOf(
@@ -79,12 +77,15 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
 
+    // ARCore (you have it in catalog but not using it)
+    implementation(libs.arcore)
+
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
-    // Testes
+    // Tests
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)

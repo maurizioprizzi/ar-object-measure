@@ -1,5 +1,5 @@
 [versions]
-agp = "8.12.0"
+agp = "8.9.0"
 kotlin = "2.0.21"
 ksp = "2.0.20-1.0.24"
 coreKtx = "1.13.1"
@@ -43,6 +43,15 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
+
+[bundles]
+# Agrupa as principais bibliotecas de UI do Compose
+compose-ui = [
+    "androidx-ui",
+    "androidx-ui-graphics",
+    "androidx-ui-tooling-preview",
+    "androidx-material3"
+]
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
