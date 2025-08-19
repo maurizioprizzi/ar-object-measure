@@ -1,25 +1,30 @@
 pluginManagement {
     repositories {
-        google() // Recommended to be first for Android projects
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+            }
+        }
         mavenCentral()
         gradlePluginPortal()
     }
 }
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        google()
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+            }
+        }
         mavenCentral()
     }
 }
-rootProject.name = "ARObjectMeasure"
-include(":app")
 
-buildCache {
-    local {
-        isEnabled = true
-    }
-}
-gradle.settingsEvaluated {
-    gradle.startParameter.isParallelProjectExecutionEnabled = true
-}
+rootProject.name = "AR Object Measure"
+include(":app")

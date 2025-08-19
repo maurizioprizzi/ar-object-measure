@@ -2,18 +2,18 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.hilt) // Use alias instead of string
+    alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "com.objectmeasure.ar"
-    compileSdk = 36 // 36 might be too new, try 35
+    compileSdk = 34 // Fixed: Changed from 36 to 34 (latest stable)
 
     defaultConfig {
         applicationId = "com.objectmeasure.ar"
-        minSdk = 24
-        targetSdk = 36 // Match with compileSdk
+        minSdk = 24 // ARCore minimum requirement
+        targetSdk = 34 // Fixed: Changed from 36 to 34
         versionCode = 1
         versionName = "1.0"
 
@@ -32,6 +32,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            isDebuggable = true
         }
     }
 
@@ -44,22 +45,23 @@ android {
         jvmTarget = "17"
         freeCompilerArgs += listOf(
             "-Xjvm-default=all",
-            "-opt-in=kotlin.RequiresOptIn"
+            "-opt-in=kotlin.RequiresOptIn",
+            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
         )
     }
 
     buildFeatures {
         compose = true
-        buildConfig = true // Explicitly enable BuildConfig
+        buildConfig = true
     }
-
-    // Remove composeOptions since you're using kotlin-compose plugin
-    // The plugin handles this automatically
 
     packaging {
         resources.excludes += setOf(
             "META-INF/LICENSE*",
-            "META-INF/NOTICE*"
+            "META-INF/NOTICE*",
+            "META-INF/ASL2.0",
+            "META-INF/LGPL2.1"
         )
     }
 }
@@ -72,28 +74,40 @@ dependencies {
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
+    implementation(libs.bundles.compose.ui)
 
-    // ARCore (you have it in catalog but not using it)
-    implementation(libs.arcore)
-
-    // Hilt
+    // Dependency Injection
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
-    // Tests
-    testImplementation(libs.junit)
-    testImplementation(libs.kotlinx.coroutines.test)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
+    // Camera (Essential for AR)
+    implementation(libs.bundles.camera)
 
-    // Debug
+    // AR
+    implementation(libs.arcore)
+
+    // Navigation
+    implementation(libs.androidx.navigation.compose)
+
+    // Permissions (Camera permissions)
+    implementation(libs.accompanist.permissions)
+
+    // Database (Local storage for measurements)
+    implementation(libs.bundles.room)
+    ksp(libs.androidx.room.compiler)
+
+    // Preferences
+    implementation(libs.androidx.datastore.preferences)
+
+    // Unit Tests
+    testImplementation(libs.bundles.testing)
+
+    // Android Tests
+    androidTestImplementation(libs.bundles.android.testing)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+
+    // Debug Tools
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
