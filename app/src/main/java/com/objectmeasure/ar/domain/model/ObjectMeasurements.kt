@@ -6,437 +6,487 @@ import kotlinx.serialization.Serializable
 import kotlin.math.*
 
 /**
- * Representa as medições de um objeto detectado - DIA 3 REVISADO
- * Estrutura completa para medições 3D, cálculos derivados e validações
+ * Sistema de Medições de Objetos - VERSÃO FINAL CONSOLIDADA
+ *
+ * Resolve todos os conflitos entre os 3 arquivos anteriores:
+ * - Estrutura eficiente com cálculos lazy
+ * - API consistente e unificada
+ * - Performance otimizada com cache
+ * - Validações matemáticas robustas
+ * - Factory methods especializados
+ * - Sistema de qualidade integrado
+ *
+ * @version 2.3 FINAL
+ */
+
+// ========== MEASUREMENT METHODS ==========
+
+@Serializable
+enum class MeasurementMethod(val displayName: String, val accuracy: Float) {
+    AR_DETECTION("Detecção AR", 0.8f),
+    MANUAL_INPUT("Entrada Manual", 0.95f),
+    REFERENCE_CALIBRATION("Calibração", 0.9f),
+    ML_ESTIMATION("Estimativa ML", 0.7f),
+    CALCULATED("Calculado", 0.85f),
+    IMPORTED("Importado", 0.6f),
+    SENSOR_FUSION("Fusão de Sensores", 0.9f)
+}
+
+@Serializable
+enum class ObjectShape(val displayName: String) {
+    RECTANGULAR("Retangular"),
+    CYLINDRICAL("Cilíndrico"),
+    SPHERICAL("Esférico"),
+    IRREGULAR("Irregular"),
+    FLAT("Plano"),
+    UNKNOWN("Desconhecido")
+}
+
+// ========== CORE MEASUREMENT DATA CLASS ==========
+
+/**
+ * Estrutura otimizada que armazena apenas medições essenciais
+ * e calcula derivadas on-demand com cache
  */
 @Serializable
 data class ObjectMeasurements(
-    // ========== DIMENSÕES BÁSICAS ==========
-    val width: Measurement? = null,
-    val height: Measurement? = null,
-    val depth: Measurement? = null,
-
-    // ========== MEDIÇÕES DERIVADAS ==========
-    val area: Measurement? = null,
-    val volume: Measurement? = null,
-    val perimeter: Measurement? = null,
-    val diagonal: Measurement? = null,
-
-    // ========== PROPRIEDADES FÍSICAS ==========
-    val weight: Measurement? = null,
-    val density: Measurement? = null,
-
-    // ========== POSIÇÃO/ORIENTAÇÃO ==========
-    val distance: Measurement? = null,
-    val inclination: Measurement? = null,
-    val rotation: Measurement? = null,
-
-    // ========== MEDIÇÕES ESPECÍFICAS ==========
-    val diameter: Measurement? = null,    // Para objetos circulares
-    val radius: Measurement? = null,      // Para objetos circulares
-    val circumference: Measurement? = null, // Para objetos circulares
+    // ========== DIMENSÕES PRIMÁRIAS (sempre armazenadas) ==========
+    private val _measurements: Map<MeasurementType, Measurement> = emptyMap(),
 
     // ========== METADADOS ==========
-    val timestamp: Long = System.currentTimeMillis(),
-    val measurementMethod: MeasurementMethod = MeasurementMethod.AR_DETECTION
+    val timestamp: Long = getCurrentTimeMillis(),
+    val measurementMethod: MeasurementMethod = MeasurementMethod.AR_DETECTION,
+    val objectShape: ObjectShape = ObjectShape.UNKNOWN,
+    val calibrationData: CalibrationReference? = null,
+
+    // ========== CACHE INTERNO ==========
+    @kotlinx.serialization.Transient
+    private val calculationCache: MutableMap<String, Measurement> = mutableMapOf()
 ) {
 
-    // ========== VALIDAÇÕES BÁSICAS ==========
+    // ========== PROPRIEDADES DIRETAS (sem cálculos) ==========
 
-    /**
-     * Verifica se pelo menos uma medição está disponível
-     */
-    fun hasAnyMeasurement(): Boolean {
-        return getAllMeasurements().isNotEmpty()
+    val width: Measurement? get() = _measurements[MeasurementType.WIDTH]
+    val height: Measurement? get() = _measurements[MeasurementType.HEIGHT]
+    val depth: Measurement? get() = _measurements[MeasurementType.DEPTH]
+    val weight: Measurement? get() = _measurements[MeasurementType.WEIGHT]
+    val distance: Measurement? get() = _measurements[MeasurementType.DISTANCE]
+    val diameter: Measurement? get() = _measurements[MeasurementType.DIAMETER]
+    val volume: Measurement? get() = _measurements[MeasurementType.VOLUME]
+    val temperature: Measurement? get() = _measurements[MeasurementType.TEMPERATURE]
+
+    // ========== PROPRIEDADES CALCULADAS (com cache) ==========
+
+    val area: Measurement? get() = getOrCalculate("area") { calculateArea() }
+    val perimeter: Measurement? get() = getOrCalculate("perimeter") { calculatePerimeter() }
+    val diagonal: Measurement? get() = getOrCalculate("diagonal") { calculateDiagonal() }
+    val diagonal3D: Measurement? get() = getOrCalculate("diagonal3D") { calculate3DDiagonal() }
+    val radius: Measurement? get() = getOrCalculate("radius") { calculateRadius() }
+    val circumference: Measurement? get() = getOrCalculate("circumference") { calculateCircumference() }
+    val surfaceArea: Measurement? get() = getOrCalculate("surfaceArea") { calculateSurfaceArea() }
+    val density: Measurement? get() = getOrCalculate("density") { calculateDensity() }
+
+    // ========== CORE API ==========
+
+    fun hasAnyMeasurement(): Boolean = _measurements.isNotEmpty()
+
+    fun hasAllBasicMeasurements(): Boolean {
+        return when (objectShape) {
+            ObjectShape.RECTANGULAR -> width != null && height != null && depth != null
+            ObjectShape.CYLINDRICAL -> diameter != null && height != null
+            ObjectShape.SPHERICAL -> diameter != null
+            ObjectShape.FLAT -> width != null && height != null
+            else -> width != null && height != null
+        }
     }
 
-    /**
-     * Verifica se todas as medições básicas estão disponíveis
-     */
-    fun hasAllMeasurements(): Boolean {
-        return width != null && height != null && depth != null && weight != null
-    }
+    fun hasComplete3DDimensions(): Boolean = width != null && height != null && depth != null
 
-    /**
-     * Verifica se tem dimensões 3D completas
-     */
-    fun hasComplete3DDimensions(): Boolean {
-        return width != null && height != null && depth != null
-    }
+    fun getAllMeasurements(): List<Measurement> = _measurements.values.toList()
 
-    /**
-     * Verifica se tem dimensões 2D básicas
-     */
-    fun hasBasic2DDimensions(): Boolean {
-        return width != null && height != null
-    }
+    fun getMeasurementByType(type: MeasurementType): Measurement? = _measurements[type]
 
-    /**
-     * Obtém todas as medições não-nulas
-     */
-    fun getAllMeasurements(): List<Measurement> {
-        return listOfNotNull(
-            width, height, depth, area, volume, perimeter, diagonal,
-            weight, density, distance, inclination, rotation,
-            diameter, radius, circumference
-        )
-    }
-
-    /**
-     * Obtém medições por categoria
-     */
-    fun getMeasurementsByCategory(category: UnitCategory): List<Measurement> {
-        return getAllMeasurements().filter { it.unit.category == category }
-    }
-
-    /**
-     * Obtém a medição primária (mais importante para o objeto)
-     */
     fun getPrimaryMeasurement(): Measurement? {
-        return when {
-            height != null -> height
-            width != null -> width
-            diameter != null -> diameter
-            volume != null -> volume
-            area != null -> area
-            depth != null -> depth
-            weight != null -> weight
-            distance != null -> distance
-            else -> getAllMeasurements().firstOrNull()
+        return when (objectShape) {
+            ObjectShape.CYLINDRICAL, ObjectShape.SPHERICAL -> diameter
+            ObjectShape.FLAT -> width ?: height
+            else -> height ?: width ?: depth ?: diameter ?: volume ?: weight ?: distance
         }
     }
 
-    // ========== CÁLCULOS AUTOMÁTICOS ==========
-
-    /**
-     * Calcula área automaticamente se width e height estão disponíveis
-     */
-    fun calculateArea(): Measurement? {
-        return if (width != null && height != null &&
-            width.unit.category == UnitCategory.LENGTH &&
-            height.unit.category == UnitCategory.LENGTH) {
-
-            // Converter para mesma unidade
-            val heightConverted = height.convertTo(width.unit)
-            val areaValue = width.value * heightConverted.value
-
-            val areaUnit = when (width.unit) {
-                MeasurementUnit.MILLIMETERS -> MeasurementUnit.SQUARE_MILLIMETERS
-                MeasurementUnit.CENTIMETERS -> MeasurementUnit.SQUARE_CENTIMETERS
-                MeasurementUnit.METERS -> MeasurementUnit.SQUARE_METERS
-                MeasurementUnit.INCHES -> MeasurementUnit.SQUARE_INCHES
-                MeasurementUnit.FEET -> MeasurementUnit.SQUARE_FEET
-                else -> MeasurementUnit.SQUARE_CENTIMETERS
-            }
-
-            val confidence = minOf(width.confidence, height.confidence)
-            Measurement(areaValue, areaUnit, confidence)
-        } else null
+    fun getAverageConfidence(): Float {
+        val confidences = _measurements.values.map { it.confidence }
+        return if (confidences.isNotEmpty()) confidences.average().toFloat() else 0f
     }
 
-    /**
-     * Calcula volume automaticamente para objetos retangulares
-     */
-    fun calculateVolume(): Measurement? {
-        return if (width != null && height != null && depth != null) {
-            // Converter todas para mesma unidade
-            val heightConverted = height.convertTo(width.unit)
-            val depthConverted = depth.convertTo(width.unit)
+    // ========== CALCULATION METHODS (cached) ==========
 
-            val volumeValue = width.value * heightConverted.value * depthConverted.value
-
-            // Volume em unidade cúbica apropriada ou litros
-            val volumeUnit = when (width.unit) {
-                MeasurementUnit.CENTIMETERS -> MeasurementUnit.LITERS
-                MeasurementUnit.METERS -> MeasurementUnit.CUBIC_METERS
-                MeasurementUnit.MILLIMETERS -> MeasurementUnit.MILLILITERS
-                else -> MeasurementUnit.LITERS
-            }
-
-            // Converter para unidade de volume apropriada
-            val finalVolumeValue = when (width.unit) {
-                MeasurementUnit.CENTIMETERS -> volumeValue / 1000.0 // cm³ to L
-                MeasurementUnit.MILLIMETERS -> volumeValue / 1000000.0 // mm³ to mL
-                else -> volumeValue
-            }
-
-            val confidence = minOf(width.confidence, height.confidence, depth.confidence)
-            Measurement(finalVolumeValue, volumeUnit, confidence)
-        } else null
-    }
-
-    /**
-     * Calcula perímetro para objetos retangulares
-     */
-    fun calculatePerimeter(): Measurement? {
-        return if (width != null && height != null) {
-            val heightConverted = height.convertTo(width.unit)
-            val perimeterValue = 2 * (width.value + heightConverted.value)
-            val confidence = minOf(width.confidence, height.confidence)
-
-            Measurement(perimeterValue, width.unit, confidence)
-        } else null
-    }
-
-    /**
-     * Calcula diagonal para objetos retangulares
-     */
-    fun calculateDiagonal(): Measurement? {
-        return if (width != null && height != null) {
-            val heightConverted = height.convertTo(width.unit)
-            val diagonalValue = sqrt(width.value.pow(2) + heightConverted.value.pow(2))
-            val confidence = minOf(width.confidence, height.confidence)
-
-            Measurement(diagonalValue, width.unit, confidence)
-        } else null
-    }
-
-    /**
-     * Calcula diagonal 3D
-     */
-    fun calculate3DDiagonal(): Measurement? {
-        return if (width != null && height != null && depth != null) {
-            val heightConverted = height.convertTo(width.unit)
-            val depthConverted = depth.convertTo(width.unit)
-
-            val diagonalValue = sqrt(
-                width.value.pow(2) +
-                        heightConverted.value.pow(2) +
-                        depthConverted.value.pow(2)
-            )
-
-            val confidence = minOf(width.confidence, height.confidence, depth.confidence)
-            Measurement(diagonalValue, width.unit, confidence)
-        } else null
-    }
-
-    /**
-     * Calcula circumferência a partir do diâmetro
-     */
-    fun calculateCircumference(): Measurement? {
-        return diameter?.let { d ->
-            val circumferenceValue = PI * d.value
-            Measurement(circumferenceValue, d.unit, d.confidence)
+    private fun getOrCalculate(key: String, calculator: () -> Measurement?): Measurement? {
+        return calculationCache.getOrPut(key) {
+            calculator() ?: return null
         }
     }
 
-    /**
-     * Calcula raio a partir do diâmetro
-     */
-    fun calculateRadius(): Measurement? {
+    private fun calculateArea(): Measurement? {
+        return when (objectShape) {
+            ObjectShape.RECTANGULAR, ObjectShape.FLAT -> calculateRectangularArea()
+            ObjectShape.CYLINDRICAL -> calculateCylinderBaseArea()
+            ObjectShape.SPHERICAL -> calculateSphereArea()
+            else -> calculateRectangularArea() // Fallback
+        }
+    }
+
+    private fun calculateRectangularArea(): Measurement? {
+        val w = width ?: return null
+        val h = height ?: return null
+
+        if (w.unit.category != UnitCategory.LENGTH || h.unit.category != UnitCategory.LENGTH) return null
+
+        val hConverted = h.convertTo(w.unit)
+        val areaValue = w.value * hConverted.value
+        val areaUnit = getAreaUnit(w.unit)
+        val confidence = minOf(w.confidence, h.confidence) * measurementMethod.accuracy
+
+        return Measurement(areaValue, areaUnit, confidence)
+    }
+
+    private fun calculateCylinderBaseArea(): Measurement? {
+        val d = diameter ?: return null
+        val radius = d.value / 2.0
+        val areaValue = PI * radius * radius
+        val areaUnit = getAreaUnit(d.unit)
+
+        return Measurement(areaValue, areaUnit, d.confidence * measurementMethod.accuracy)
+    }
+
+    private fun calculateSphereArea(): Measurement? {
+        val d = diameter ?: return null
+        val radius = d.value / 2.0
+        val areaValue = 4 * PI * radius * radius
+        val areaUnit = getAreaUnit(d.unit)
+
+        return Measurement(areaValue, areaUnit, d.confidence * measurementMethod.accuracy)
+    }
+
+    private fun calculateVolume(): Measurement? {
+        return when (objectShape) {
+            ObjectShape.RECTANGULAR -> calculateRectangularVolume()
+            ObjectShape.CYLINDRICAL -> calculateCylinderVolume()
+            ObjectShape.SPHERICAL -> calculateSphereVolume()
+            else -> calculateRectangularVolume() // Fallback
+        }
+    }
+
+    private fun calculateRectangularVolume(): Measurement? {
+        val w = width ?: return null
+        val h = height ?: return null
+        val d = depth ?: return null
+
+        val hConverted = h.convertTo(w.unit)
+        val dConverted = d.convertTo(w.unit)
+
+        val volumeValue = w.value * hConverted.value * dConverted.value
+        val volumeUnit = getVolumeUnit(w.unit)
+        val convertedVolume = convertToVolumeUnit(volumeValue, w.unit, volumeUnit)
+        val confidence = minOf(w.confidence, h.confidence, d.confidence) * measurementMethod.accuracy
+
+        return Measurement(convertedVolume, volumeUnit, confidence)
+    }
+
+    private fun calculateCylinderVolume(): Measurement? {
+        val d = diameter ?: return null
+        val h = height ?: return null
+
+        val hConverted = h.convertTo(d.unit)
+        val radius = d.value / 2.0
+        val volumeValue = PI * radius * radius * hConverted.value
+        val volumeUnit = getVolumeUnit(d.unit)
+        val convertedVolume = convertToVolumeUnit(volumeValue, d.unit, volumeUnit)
+        val confidence = minOf(d.confidence, h.confidence) * measurementMethod.accuracy
+
+        return Measurement(convertedVolume, volumeUnit, confidence)
+    }
+
+    private fun calculateSphereVolume(): Measurement? {
+        val d = diameter ?: return null
+        val radius = d.value / 2.0
+        val volumeValue = (4.0 / 3.0) * PI * radius.pow(3)
+        val volumeUnit = getVolumeUnit(d.unit)
+        val convertedVolume = convertToVolumeUnit(volumeValue, d.unit, volumeUnit)
+
+        return Measurement(convertedVolume, volumeUnit, d.confidence * measurementMethod.accuracy)
+    }
+
+    private fun calculatePerimeter(): Measurement? {
+        return when (objectShape) {
+            ObjectShape.RECTANGULAR, ObjectShape.FLAT -> {
+                val w = width ?: return null
+                val h = height ?: return null
+                val hConverted = h.convertTo(w.unit)
+                val perimeterValue = 2 * (w.value + hConverted.value)
+                val confidence = minOf(w.confidence, h.confidence) * measurementMethod.accuracy
+                Measurement(perimeterValue, w.unit, confidence)
+            }
+            ObjectShape.CYLINDRICAL, ObjectShape.SPHERICAL -> circumference
+            else -> null
+        }
+    }
+
+    private fun calculateDiagonal(): Measurement? {
+        val w = width ?: return null
+        val h = height ?: return null
+
+        val hConverted = h.convertTo(w.unit)
+        val diagonalValue = sqrt(w.value.pow(2) + hConverted.value.pow(2))
+        val confidence = minOf(w.confidence, h.confidence) * measurementMethod.accuracy
+
+        return Measurement(diagonalValue, w.unit, confidence)
+    }
+
+    private fun calculate3DDiagonal(): Measurement? {
+        val w = width ?: return null
+        val h = height ?: return null
+        val d = depth ?: return null
+
+        val hConverted = h.convertTo(w.unit)
+        val dConverted = d.convertTo(w.unit)
+
+        val diagonalValue = sqrt(w.value.pow(2) + hConverted.value.pow(2) + dConverted.value.pow(2))
+        val confidence = minOf(w.confidence, h.confidence, d.confidence) * measurementMethod.accuracy
+
+        return Measurement(diagonalValue, w.unit, confidence)
+    }
+
+    private fun calculateRadius(): Measurement? {
         return diameter?.let { d ->
             val radiusValue = d.value / 2.0
             Measurement(radiusValue, d.unit, d.confidence)
         }
     }
 
-    /**
-     * Calcula densidade se volume e peso estão disponíveis
-     */
-    fun calculateDensity(): Measurement? {
-        return if (volume != null && weight != null) {
-            // Converter peso para kg e volume para m³
-            val weightInKg = weight.convertTo(MeasurementUnit.KILOGRAMS)
-            val volumeInM3 = volume.convertTo(MeasurementUnit.CUBIC_METERS)
-
-            if (volumeInM3.value > 0) {
-                val densityValue = weightInKg.value / volumeInM3.value
-                val confidence = minOf(weight.confidence, volume.confidence)
-
-                // kg/m³ é a unidade padrão de densidade
-                Measurement(densityValue, MeasurementUnit.KILOGRAMS, confidence) // Note: seria melhor ter uma unidade específica
-            } else null
-        } else null
+    private fun calculateCircumference(): Measurement? {
+        return diameter?.let { d ->
+            val circumferenceValue = PI * d.value
+            Measurement(circumferenceValue, d.unit, d.confidence)
+        }
     }
 
-    // ========== VALIDAÇÕES AVANÇADAS ==========
+    private fun calculateSurfaceArea(): Measurement? {
+        return when (objectShape) {
+            ObjectShape.RECTANGULAR -> {
+                val w = width ?: return null
+                val h = height ?: return null
+                val d = depth ?: return null
 
-    /**
-     * Valida se as medições fazem sentido juntas
-     */
+                val hConverted = h.convertTo(w.unit)
+                val dConverted = d.convertTo(w.unit)
+
+                // 2 * (wh + wd + hd)
+                val surfaceValue = 2 * (w.value * hConverted.value +
+                        w.value * dConverted.value +
+                        hConverted.value * dConverted.value)
+                val areaUnit = getAreaUnit(w.unit)
+                val confidence = minOf(w.confidence, h.confidence, d.confidence) * measurementMethod.accuracy
+
+                Measurement(surfaceValue, areaUnit, confidence)
+            }
+            ObjectShape.CYLINDRICAL -> {
+                val d = diameter ?: return null
+                val h = height ?: return null
+
+                val hConverted = h.convertTo(d.unit)
+                val radius = d.value / 2.0
+
+                // 2πr² + 2πrh = 2πr(r + h)
+                val surfaceValue = 2 * PI * radius * (radius + hConverted.value)
+                val areaUnit = getAreaUnit(d.unit)
+                val confidence = minOf(d.confidence, h.confidence) * measurementMethod.accuracy
+
+                Measurement(surfaceValue, areaUnit, confidence)
+            }
+            ObjectShape.SPHERICAL -> calculateSphereArea()
+            else -> null
+        }
+    }
+
+    private fun calculateDensity(): Measurement? {
+        val v = volume ?: calculateVolume() ?: return null
+        val w = weight ?: return null
+
+        if (v.value <= 0) return null
+
+        // Converter para unidades padrão: kg/m³
+        val weightInKg = w.convertTo(MeasurementUnit.KILOGRAMS)
+        val volumeInM3 = v.convertTo(MeasurementUnit.CUBIC_METERS)
+
+        val densityValue = weightInKg.value / volumeInM3.value
+        val confidence = minOf(v.confidence, w.confidence) * measurementMethod.accuracy
+
+        // Criar unidade de densidade (kg/m³) - idealmente seria uma unidade específica
+        return Measurement(densityValue, MeasurementUnit.KILOGRAMS, confidence)
+    }
+
+    // ========== HELPER METHODS ==========
+
+    private fun getAreaUnit(lengthUnit: MeasurementUnit): MeasurementUnit {
+        return when (lengthUnit) {
+            MeasurementUnit.MILLIMETERS -> MeasurementUnit.SQUARE_MILLIMETERS
+            MeasurementUnit.CENTIMETERS -> MeasurementUnit.SQUARE_CENTIMETERS
+            MeasurementUnit.METERS -> MeasurementUnit.SQUARE_METERS
+            MeasurementUnit.INCHES -> MeasurementUnit.SQUARE_INCHES
+            MeasurementUnit.FEET -> MeasurementUnit.SQUARE_FEET
+            else -> MeasurementUnit.SQUARE_CENTIMETERS
+        }
+    }
+
+    private fun getVolumeUnit(lengthUnit: MeasurementUnit): MeasurementUnit {
+        return when (lengthUnit) {
+            MeasurementUnit.MILLIMETERS -> MeasurementUnit.MILLILITERS
+            MeasurementUnit.CENTIMETERS -> MeasurementUnit.LITERS
+            MeasurementUnit.METERS -> MeasurementUnit.CUBIC_METERS
+            MeasurementUnit.INCHES, MeasurementUnit.FEET -> MeasurementUnit.FLUID_OUNCES
+            else -> MeasurementUnit.LITERS
+        }
+    }
+
+    private fun convertToVolumeUnit(volumeValue: Double, fromUnit: MeasurementUnit, toUnit: MeasurementUnit): Double {
+        return when (fromUnit) {
+            MeasurementUnit.CENTIMETERS -> when (toUnit) {
+                MeasurementUnit.LITERS -> volumeValue / 1000.0 // cm³ to L
+                MeasurementUnit.MILLILITERS -> volumeValue // cm³ = mL
+                else -> volumeValue
+            }
+            MeasurementUnit.MILLIMETERS -> when (toUnit) {
+                MeasurementUnit.MILLILITERS -> volumeValue / 1000.0 // mm³ to mL
+                else -> volumeValue
+            }
+            MeasurementUnit.METERS -> volumeValue // m³ stays m³
+            else -> volumeValue
+        }
+    }
+
+    // ========== VALIDATION ==========
+
     fun isValid(): Boolean {
-        // Verificar se medições são positivas
-        if (getAllMeasurements().any { it.value <= 0 }) return false
+        val measurements = _measurements.values
+        if (measurements.isEmpty()) return false
 
-        // Verificar consistência entre medições
-        if (!isVolumeConsistent()) return false
-        if (!isAreaConsistent()) return false
-        if (!isCircularMeasurementsConsistent()) return false
+        // Verificar se todas as medições são positivas e finitas
+        if (measurements.any { !it.isReasonableValue() }) return false
 
-        // Verificar se pelo menos uma medição tem confidence alta
-        if (getAllMeasurements().none { it.isReliable() }) return false
+        // Verificar consistência física básica
+        if (!hasPhysicalConsistency()) return false
+
+        // Verificar se pelo menos uma medição tem confidence razoável
+        if (measurements.none { it.confidence >= 0.3f }) return false
 
         return true
     }
 
-    /**
-     * Verifica consistência do volume
-     */
-    private fun isVolumeConsistent(): Boolean {
-        if (volume == null || !hasComplete3DDimensions()) return true
+    private fun hasPhysicalConsistency(): Boolean {
+        // Verificar proporcionalidade básica
+        if (width != null && height != null) {
+            val w = width!!.convertTo(MeasurementUnit.METERS).value
+            val h = height!!.convertTo(MeasurementUnit.METERS).value
 
-        val calculatedVolume = calculateVolume() ?: return true
-        val volumeConverted = volume.convertTo(calculatedVolume.unit)
-
-        val difference = abs(volumeConverted.value - calculatedVolume.value)
-        val tolerance = calculatedVolume.value * 0.2 // 20% tolerance
-
-        return difference <= tolerance
-    }
-
-    /**
-     * Verifica consistência da área
-     */
-    private fun isAreaConsistent(): Boolean {
-        if (area == null || !hasBasic2DDimensions()) return true
-
-        val calculatedArea = calculateArea() ?: return true
-        val areaConverted = area.convertTo(calculatedArea.unit)
-
-        val difference = abs(areaConverted.value - calculatedArea.value)
-        val tolerance = calculatedArea.value * 0.15 // 15% tolerance
-
-        return difference <= tolerance
-    }
-
-    /**
-     * Verifica consistência de medições circulares
-     */
-    private fun isCircularMeasurementsConsistent(): Boolean {
-        if (diameter == null) return true
-
-        // Verificar radius vs diameter
-        radius?.let { r ->
-            val expectedRadius = diameter.value / 2.0
-            val radiusConverted = r.convertTo(diameter.unit)
-            val difference = abs(radiusConverted.value - expectedRadius)
-            val tolerance = expectedRadius * 0.1 // 10% tolerance
-
-            if (difference > tolerance) return false
+            // Objetos não devem ter proporções muito extremas
+            val ratio = maxOf(w, h) / minOf(w, h)
+            if (ratio > 1000) return false // Máximo 1000:1
         }
 
-        // Verificar circumference vs diameter
-        circumference?.let { c ->
-            val expectedCircumference = PI * diameter.value
-            val circumferenceConverted = c.convertTo(diameter.unit)
-            val difference = abs(circumferenceConverted.value - expectedCircumference)
-            val tolerance = expectedCircumference * 0.1 // 10% tolerance
-
-            if (difference > tolerance) return false
+        // Verificar densidade se disponível
+        density?.let { d ->
+            // Densidade deve estar em range razoável (0.1 a 30 g/cm³)
+            val densityGPerCm3 = d.value / 1000.0 // Assumindo kg/m³ para g/cm³
+            if (densityGPerCm3 < 0.1 || densityGPerCm3 > 30.0) return false
         }
 
         return true
     }
 
-    // ========== CONVERSÕES ==========
+    // ========== CONVERSIONS ==========
 
-    /**
-     * Converte todas as medições para as unidades preferidas do usuário
-     */
     fun convertTo(preferences: UserMeasurementPreferences): ObjectMeasurements {
-        return copy(
-            width = width?.convertTo(preferences.preferredLengthUnit),
-            height = height?.convertTo(preferences.preferredLengthUnit),
-            depth = depth?.convertTo(preferences.preferredLengthUnit),
-            diameter = diameter?.convertTo(preferences.preferredLengthUnit),
-            radius = radius?.convertTo(preferences.preferredLengthUnit),
-            circumference = circumference?.convertTo(preferences.preferredLengthUnit),
-            perimeter = perimeter?.convertTo(preferences.preferredLengthUnit),
-            diagonal = diagonal?.convertTo(preferences.preferredLengthUnit),
+        val convertedMeasurements = _measurements.mapValues { (type, measurement) ->
+            val targetUnit = when (type) {
+                MeasurementType.LENGTH, MeasurementType.WIDTH, MeasurementType.HEIGHT,
+                MeasurementType.DEPTH, MeasurementType.DISTANCE, MeasurementType.DIAMETER ->
+                    preferences.preferredLengthUnit
+                MeasurementType.WEIGHT -> preferences.preferredWeightUnit
+                MeasurementType.VOLUME -> preferences.preferredVolumeUnit
+                MeasurementType.TEMPERATURE -> preferences.preferredTemperatureUnit
+                else -> measurement.unit
+            }
+            try {
+                measurement.convertTo(targetUnit)
+            } catch (e: Exception) {
+                measurement // Keep original if conversion fails
+            }
+        }
 
-            area = area?.let {
-                val areaUnit = when (preferences.preferredLengthUnit) {
-                    MeasurementUnit.MILLIMETERS -> MeasurementUnit.SQUARE_MILLIMETERS
-                    MeasurementUnit.CENTIMETERS -> MeasurementUnit.SQUARE_CENTIMETERS
-                    MeasurementUnit.METERS -> MeasurementUnit.SQUARE_METERS
-                    else -> MeasurementUnit.SQUARE_CENTIMETERS
-                }
-                it.convertTo(areaUnit)
-            },
-
-            volume = volume?.convertTo(preferences.preferredVolumeUnit),
-            weight = weight?.convertTo(preferences.preferredWeightUnit),
-
-            distance = distance?.convertTo(preferences.preferredLengthUnit),
-            inclination = inclination?.convertTo(MeasurementUnit.DEGREES),
-            rotation = rotation?.convertTo(MeasurementUnit.DEGREES)
-        )
+        return copy(_measurements = convertedMeasurements).also {
+            it.calculationCache.clear() // Clear cache after conversion
+        }
     }
 
-    /**
-     * Converte para melhores unidades automaticamente
-     */
-    fun toBestUnits(useMetric: Boolean = true): ObjectMeasurements {
-        return copy(
-            width = width?.toBestUnit(useMetric),
-            height = height?.toBestUnit(useMetric),
-            depth = depth?.toBestUnit(useMetric),
-            area = area?.toBestUnit(useMetric),
-            volume = volume?.toBestUnit(useMetric),
-            weight = weight?.toBestUnit(useMetric),
-            diameter = diameter?.toBestUnit(useMetric),
-            radius = radius?.toBestUnit(useMetric),
-            circumference = circumference?.toBestUnit(useMetric),
-            perimeter = perimeter?.toBestUnit(useMetric),
-            diagonal = diagonal?.toBestUnit(useMetric),
-            distance = distance?.toBestUnit(useMetric)
-        )
+    fun toBestUnits(useMetric: Boolean = true, objectContext: String? = null): ObjectMeasurements {
+        val convertedMeasurements = _measurements.mapValues { (_, measurement) ->
+            measurement.toBestUnit(useMetric, objectContext)
+        }
+
+        return copy(_measurements = convertedMeasurements).also {
+            it.calculationCache.clear()
+        }
     }
 
-    // ========== COMPARAÇÕES ==========
+    // ========== COMPARISON ==========
 
-    /**
-     * Compara com outro ObjectMeasurements
-     */
-    fun similarTo(other: ObjectMeasurements, tolerance: Double = 0.1): Boolean {
-        return compareMeasurement(width, other.width, tolerance) &&
-                compareMeasurement(height, other.height, tolerance) &&
-                compareMeasurement(depth, other.depth, tolerance) &&
-                compareMeasurement(weight, other.weight, tolerance)
-    }
+    fun similarTo(other: ObjectMeasurements, tolerance: Double = 0.15): Boolean {
+        val thisTypes = _measurements.keys
+        val otherTypes = other._measurements.keys
+        val commonTypes = thisTypes.intersect(otherTypes)
 
-    /**
-     * Calcula score de similaridade
-     */
-    fun similarityScore(other: ObjectMeasurements): Float {
-        val comparisons = listOf(
-            width to other.width,
-            height to other.height,
-            depth to other.depth,
-            weight to other.weight,
-            volume to other.volume
-        )
+        if (commonTypes.isEmpty()) return false
 
-        val scores = comparisons.mapNotNull { (m1, m2) ->
-            if (m1 != null && m2 != null) {
+        return commonTypes.all { type ->
+            val m1 = _measurements[type]!!
+            val m2 = other._measurements[type]!!
+
+            try {
                 val m2Converted = m2.convertTo(m1.unit)
-                val diff = abs(m1.value - m2Converted.value) / m1.value
-                (1.0 - diff.coerceAtMost(1.0)).toFloat()
-            } else null
+                val difference = abs(m1.value - m2Converted.value) / m1.value
+                difference <= tolerance
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
+
+    fun similarityScore(other: ObjectMeasurements): Float {
+        val thisTypes = _measurements.keys
+        val otherTypes = other._measurements.keys
+        val commonTypes = thisTypes.intersect(otherTypes)
+
+        if (commonTypes.isEmpty()) return 0f
+
+        val scores = commonTypes.mapNotNull { type ->
+            val m1 = _measurements[type]!!
+            val m2 = other._measurements[type]!!
+
+            try {
+                val m2Converted = m2.convertTo(m1.unit)
+                val difference = abs(m1.value - m2Converted.value) / m1.value
+                (1.0 - difference.coerceAtMost(1.0)).toFloat()
+            } catch (e: Exception) {
+                null
+            }
         }
 
         return scores.averageOrNull() ?: 0f
     }
 
-    /**
-     * Compara medição individual
-     */
-    private fun compareMeasurement(m1: Measurement?, m2: Measurement?, tolerance: Double): Boolean {
-        return when {
-            m1 == null && m2 == null -> true
-            m1 == null || m2 == null -> false
-            else -> {
-                val converted = m2.convertTo(m1.unit)
-                abs(m1.value - converted.value) / m1.value <= tolerance
-            }
-        }
-    }
+    // ========== EXPORT/DISPLAY ==========
 
-    // ========== FORMATAÇÃO E EXPORT ==========
-
-    /**
-     * Formata medições para display
-     */
     fun formatForDisplay(preferences: UserMeasurementPreferences): Map<String, String> {
         val converted = convertTo(preferences)
         val result = mutableMapOf<String, String>()
@@ -453,167 +503,118 @@ data class ObjectMeasurements(
         return result
     }
 
-    /**
-     * Exporta dados para serialização
-     */
     fun toExportData(): Map<String, String> {
-        val result = mutableMapOf<String, String>()
-
-        width?.let { result["width"] = "${it.value}|${it.unit.symbol}|${it.confidence}" }
-        height?.let { result["height"] = "${it.value}|${it.unit.symbol}|${it.confidence}" }
-        depth?.let { result["depth"] = "${it.value}|${it.unit.symbol}|${it.confidence}" }
-        diameter?.let { result["diameter"] = "${it.value}|${it.unit.symbol}|${it.confidence}" }
-        area?.let { result["area"] = "${it.value}|${it.unit.symbol}|${it.confidence}" }
-        volume?.let { result["volume"] = "${it.value}|${it.unit.symbol}|${it.confidence}" }
-        weight?.let { result["weight"] = "${it.value}|${it.unit.symbol}|${it.confidence}" }
-        distance?.let { result["distance"] = "${it.value}|${it.unit.symbol}|${it.confidence}" }
-
-        return result
+        return _measurements.mapKeys { it.key.name }.mapValues { (_, measurement) ->
+            "${measurement.value}|${measurement.unit.symbol}|${measurement.confidence}"
+        }
     }
 
-    /**
-     * Resumo das medições mais importantes
-     */
     fun getSummary(): String {
-        val measurements = mutableListOf<String>()
+        val primary = getPrimaryMeasurement()
+        val secondary = _measurements.values.filter { it != primary }.take(2)
 
-        width?.let { measurements.add("L: ${it.formatSmart()}") }
-        height?.let { measurements.add("A: ${it.formatSmart()}") }
-        depth?.let { measurements.add("P: ${it.formatSmart()}") }
-        diameter?.let { measurements.add("Ø: ${it.formatSmart()}") }
-        volume?.let { measurements.add("Vol: ${it.formatSmart()}") }
-        weight?.let { measurements.add("Peso: ${it.formatSmart()}") }
+        val parts = mutableListOf<String>()
+        primary?.let { parts.add(it.formatSmart()) }
+        secondary.forEach { parts.add(it.formatCompact()) }
 
-        return measurements.joinToString(" • ")
+        return parts.joinToString(" • ")
     }
+
+    // ========== FACTORY METHODS ==========
 
     companion object {
-        /**
-         * Cria ObjectMeasurements vazio
-         */
-        fun empty() = ObjectMeasurements()
+        private fun getCurrentTimeMillis(): Long = System.currentTimeMillis()
 
-        // ========== FACTORY METHODS ==========
+        fun empty(): ObjectMeasurements = ObjectMeasurements()
 
-        /**
-         * Para objetos retangulares (livros, celulares, mesas)
-         */
+        fun fromMap(measurements: Map<MeasurementType, Measurement>): ObjectMeasurements {
+            return ObjectMeasurements(_measurements = measurements)
+        }
+
+        fun builder(): MeasurementBuilder = MeasurementBuilder()
+
+        // ========== SPECIALIZED FACTORIES ==========
+
         fun forRectangularObject(
             width: Measurement,
             height: Measurement,
-            depth: Measurement?
+            depth: Measurement? = null,
+            weight: Measurement? = null
         ): ObjectMeasurements {
-            val measurements = ObjectMeasurements(
-                width = width,
-                height = height,
-                depth = depth
-            )
-
-            return measurements.copy(
-                area = measurements.calculateArea(),
-                volume = depth?.let { measurements.calculateVolume() },
-                perimeter = measurements.calculatePerimeter(),
-                diagonal = measurements.calculateDiagonal()
-            )
-        }
-
-        /**
-         * Para pessoas (altura e estimativa de peso)
-         */
-        fun forPerson(
-            height: Measurement,
-            distance: Measurement
-        ): ObjectMeasurements {
-            val estimatedWeight = estimateWeightFromHeight(height)
+            val measurements = mutableMapOf<MeasurementType, Measurement>()
+            measurements[MeasurementType.WIDTH] = width
+            measurements[MeasurementType.HEIGHT] = height
+            depth?.let { measurements[MeasurementType.DEPTH] = it }
+            weight?.let { measurements[MeasurementType.WEIGHT] = it }
 
             return ObjectMeasurements(
-                height = height,
-                weight = estimatedWeight,
-                distance = distance
+                _measurements = measurements,
+                objectShape = ObjectShape.RECTANGULAR,
+                measurementMethod = MeasurementMethod.AR_DETECTION
             )
         }
 
-        /**
-         * Para recipientes (volume é medição principal)
-         */
-        fun forContainer(
-            width: Measurement,
-            height: Measurement,
-            depth: Measurement,
-            volume: Measurement?
-        ): ObjectMeasurements {
-            val measurements = ObjectMeasurements(
-                width = width,
-                height = height,
-                depth = depth,
-                volume = volume
-            )
-
-            return measurements.copy(
-                area = measurements.calculateArea(),
-                volume = volume ?: measurements.calculateVolume(),
-                perimeter = measurements.calculatePerimeter()
-            )
-        }
-
-        /**
-         * Para objetos circulares
-         */
-        fun forCircularObject(
+        fun forCylindricalObject(
             diameter: Measurement,
-            height: Measurement? = null
+            height: Measurement,
+            weight: Measurement? = null
         ): ObjectMeasurements {
-            val measurements = ObjectMeasurements(
-                diameter = diameter,
-                height = height
-            )
+            val measurements = mutableMapOf<MeasurementType, Measurement>()
+            measurements[MeasurementType.DIAMETER] = diameter
+            measurements[MeasurementType.HEIGHT] = height
+            weight?.let { measurements[MeasurementType.WEIGHT] = it }
 
-            return measurements.copy(
-                radius = measurements.calculateRadius(),
-                circumference = measurements.calculateCircumference(),
-                area = height?.let { h ->
-                    // Área da superfície circular
-                    val radius = diameter.value / 2.0
-                    val areaValue = PI * radius * radius
-                    val areaUnit = when (diameter.unit) {
-                        MeasurementUnit.CENTIMETERS -> MeasurementUnit.SQUARE_CENTIMETERS
-                        MeasurementUnit.METERS -> MeasurementUnit.SQUARE_METERS
-                        else -> MeasurementUnit.SQUARE_CENTIMETERS
-                    }
-                    Measurement(areaValue, areaUnit, diameter.confidence)
-                },
-                volume = height?.let { h ->
-                    // Volume do cilindro
-                    val radius = diameter.value / 2.0
-                    val heightConverted = h.convertTo(diameter.unit)
-                    val volumeValue = PI * radius * radius * heightConverted.value
-                    val volumeUnit = MeasurementUnit.LITERS
-                    val finalVolumeValue = when (diameter.unit) {
-                        MeasurementUnit.CENTIMETERS -> volumeValue / 1000.0 // cm³ to L
-                        MeasurementUnit.MILLIMETERS -> volumeValue / 1000000.0 // mm³ to mL
-                        else -> volumeValue
-                    }
-                    Measurement(finalVolumeValue, volumeUnit, minOf(diameter.confidence, h.confidence))
-                }
+            return ObjectMeasurements(
+                _measurements = measurements,
+                objectShape = ObjectShape.CYLINDRICAL,
+                measurementMethod = MeasurementMethod.AR_DETECTION
             )
         }
 
-        /**
-         * Cria medições mock para tipo específico
-         */
+        fun forSphericalObject(
+            diameter: Measurement,
+            weight: Measurement? = null
+        ): ObjectMeasurements {
+            val measurements = mutableMapOf<MeasurementType, Measurement>()
+            measurements[MeasurementType.DIAMETER] = diameter
+            weight?.let { measurements[MeasurementType.WEIGHT] = it }
+
+            return ObjectMeasurements(
+                _measurements = measurements,
+                objectShape = ObjectShape.SPHERICAL,
+                measurementMethod = MeasurementMethod.AR_DETECTION
+            )
+        }
+
+        fun forPerson(
+            height: Measurement,
+            distance: Measurement? = null
+        ): ObjectMeasurements {
+            val measurements = mutableMapOf<MeasurementType, Measurement>()
+            measurements[MeasurementType.HEIGHT] = height
+            distance?.let { measurements[MeasurementType.DISTANCE] = it }
+
+            // Não estimar peso - deixar para entrada manual se necessário
+            return ObjectMeasurements(
+                _measurements = measurements,
+                objectShape = ObjectShape.IRREGULAR,
+                measurementMethod = MeasurementMethod.AR_DETECTION
+            )
+        }
+
         fun createMockForType(objectType: ObjectType): ObjectMeasurements {
             return when (objectType) {
                 ObjectType.PHONE -> forRectangularObject(
                     width = 7.5.withUnit(MeasurementUnit.CENTIMETERS, 0.9f),
                     height = 15.0.withUnit(MeasurementUnit.CENTIMETERS, 0.9f),
-                    depth = 0.8.withUnit(MeasurementUnit.CENTIMETERS, 0.8f)
+                    depth = 0.8.withUnit(MeasurementUnit.CENTIMETERS, 0.8f),
+                    weight = 180.0.withUnit(MeasurementUnit.GRAMS, 0.7f)
                 )
 
-                ObjectType.BOTTLE -> forContainer(
-                    width = 6.5.withUnit(MeasurementUnit.CENTIMETERS, 0.85f),
+                ObjectType.BOTTLE -> forCylindricalObject(
+                    diameter = 6.5.withUnit(MeasurementUnit.CENTIMETERS, 0.85f),
                     height = 25.0.withUnit(MeasurementUnit.CENTIMETERS, 0.9f),
-                    depth = 6.5.withUnit(MeasurementUnit.CENTIMETERS, 0.8f),
-                    volume = 500.0.withUnit(MeasurementUnit.MILLILITERS, 0.8f)
+                    weight = 500.0.withUnit(MeasurementUnit.GRAMS, 0.8f)
                 )
 
                 ObjectType.PERSON -> forPerson(
@@ -624,16 +625,11 @@ data class ObjectMeasurements(
                 ObjectType.BOOK -> forRectangularObject(
                     width = 15.0.withUnit(MeasurementUnit.CENTIMETERS, 0.9f),
                     height = 22.0.withUnit(MeasurementUnit.CENTIMETERS, 0.9f),
-                    depth = 2.0.withUnit(MeasurementUnit.CENTIMETERS, 0.85f)
+                    depth = 2.0.withUnit(MeasurementUnit.CENTIMETERS, 0.85f),
+                    weight = 300.0.withUnit(MeasurementUnit.GRAMS, 0.8f)
                 )
 
-                ObjectType.CREDITCARD -> forRectangularObject(
-                    width = 85.6.withUnit(MeasurementUnit.MILLIMETERS, 0.95f),
-                    height = 53.98.withUnit(MeasurementUnit.MILLIMETERS, 0.95f),
-                    depth = 0.76.withUnit(MeasurementUnit.MILLIMETERS, 0.9f)
-                )
-
-                ObjectType.CUP -> forCircularObject(
+                ObjectType.CUP -> forCylindricalObject(
                     diameter = 8.0.withUnit(MeasurementUnit.CENTIMETERS, 0.85f),
                     height = 9.0.withUnit(MeasurementUnit.CENTIMETERS, 0.8f)
                 )
@@ -642,95 +638,120 @@ data class ObjectMeasurements(
             }
         }
 
-        /**
-         * Estima peso baseado na altura (para pessoas)
-         */
-        private fun estimateWeightFromHeight(height: Measurement): Measurement? {
-            return if (height.unit.category == UnitCategory.LENGTH) {
-                val heightInCm = height.convertTo(MeasurementUnit.CENTIMETERS).value
-                // Fórmula simples: peso = (altura_cm - 100) * 0.9
-                val estimatedWeight = (heightInCm - 100) * 0.9
-
-                if (estimatedWeight > 0) {
-                    Measurement(
-                        value = estimatedWeight,
-                        unit = MeasurementUnit.KILOGRAMS,
-                        confidence = height.confidence * 0.4f // Baixa confiança para estimativa
-                    )
-                } else null
-            } else null
-        }
-
-        /**
-         * Cria ObjectMeasurements a partir de BoundingBox
-         */
         fun fromBoundingBox(
             boundingBox: BoundingBox,
-            pixelsPerMeter: Float = 1000f, // Default calibration
-            objectType: ObjectType = ObjectType.UNKNOWN
+            calibrationData: CalibrationData? = null,
+            objectType: ObjectType = ObjectType.OBJECT
         ): ObjectMeasurements {
+            val pixelsPerMeter = calibrationData?.pixelsPerMeter ?: 1000f
+
             val widthInMeters = boundingBox.width() / pixelsPerMeter
             val heightInMeters = boundingBox.height() / pixelsPerMeter
 
-            val width = Measurement(widthInMeters.toDouble(), MeasurementUnit.METERS, boundingBox.confidence)
-            val height = Measurement(heightInMeters.toDouble(), MeasurementUnit.METERS, boundingBox.confidence)
+            val confidence = boundingBox.confidence.coerceIn(0f, 1f)
 
-            return forRectangularObject(width, height, null)
+            return forRectangularObject(
+                width = widthInMeters.toDouble().withUnit(MeasurementUnit.METERS, confidence),
+                height = heightInMeters.toDouble().withUnit(MeasurementUnit.METERS, confidence)
+            )
+        }
+
+        fun fromExportData(data: Map<String, String>): ObjectMeasurements {
+            val measurements = data.mapNotNull { (typeStr, valueStr) ->
+                try {
+                    val type = MeasurementType.valueOf(typeStr)
+                    val parts = valueStr.split("|")
+                    if (parts.size >= 3) {
+                        val value = parts[0].toDouble()
+                        val unit = MeasurementUnit.fromSymbol(parts[1])
+                        val confidence = parts[2].toFloat()
+
+                        if (unit != null) {
+                            type to Measurement(value, unit, confidence)
+                        } else null
+                    } else null
+                } catch (e: Exception) {
+                    null
+                }
+            }.toMap()
+
+            return ObjectMeasurements(_measurements = measurements)
         }
     }
 }
 
-/**
- * Métodos de medição
- */
-@Serializable
-enum class MeasurementMethod(val displayName: String) {
-    AR_DETECTION("Detecção AR"),
-    MANUAL_INPUT("Entrada Manual"),
-    REFERENCE_CALIBRATION("Calibração por Referência"),
-    ML_ESTIMATION("Estimativa ML"),
-    CALCULATED("Calculado"),
-    IMPORTED("Importado")
+// ========== BUILDER PATTERN ==========
+
+class MeasurementBuilder {
+    private val measurements = mutableMapOf<MeasurementType, Measurement>()
+    private var objectShape = ObjectShape.UNKNOWN
+    private var measurementMethod = MeasurementMethod.AR_DETECTION
+    private var calibrationData: CalibrationReference? = null
+
+    fun width(measurement: Measurement) = apply { measurements[MeasurementType.WIDTH] = measurement }
+    fun height(measurement: Measurement) = apply { measurements[MeasurementType.HEIGHT] = measurement }
+    fun depth(measurement: Measurement) = apply { measurements[MeasurementType.DEPTH] = measurement }
+    fun weight(measurement: Measurement) = apply { measurements[MeasurementType.WEIGHT] = measurement }
+    fun diameter(measurement: Measurement) = apply { measurements[MeasurementType.DIAMETER] = measurement }
+    fun volume(measurement: Measurement) = apply { measurements[MeasurementType.VOLUME] = measurement }
+    fun distance(measurement: Measurement) = apply { measurements[MeasurementType.DISTANCE] = measurement }
+
+    fun shape(shape: ObjectShape) = apply { objectShape = shape }
+    fun method(method: MeasurementMethod) = apply { measurementMethod = method }
+    fun calibration(calibration: CalibrationReference) = apply { calibrationData = calibration }
+
+    fun build(): ObjectMeasurements {
+        return ObjectMeasurements(
+            _measurements = measurements.toMap(),
+            objectShape = objectShape,
+            measurementMethod = measurementMethod,
+            calibrationData = calibrationData
+        )
+    }
 }
+
+// ========== SUPPORT DATA CLASSES ==========
+
+@Serializable
+data class CalibrationReference(
+    val referenceObjectType: ObjectType,
+    val pixelsPerMeter: Float,
+    val confidence: Float,
+    val timestamp: Long = System.currentTimeMillis()
+)
 
 // ========== EXTENSION FUNCTIONS ==========
 
-/**
- * Extension para listas de ObjectMeasurements
- */
 fun List<ObjectMeasurements>.averageMeasurements(): ObjectMeasurements? {
     if (isEmpty()) return null
 
-    val allWidths = mapNotNull { it.width }
-    val allHeights = mapNotNull { it.height }
-    val allDepths = mapNotNull { it.depth }
-    val allWeights = mapNotNull { it.weight }
+    // Agrupar medições por tipo
+    val measurementsByType = mutableMapOf<MeasurementType, MutableList<Measurement>>()
 
-    return ObjectMeasurements(
-        width = allWidths.averageMeasurement(),
-        height = allHeights.averageMeasurement(),
-        depth = allDepths.averageMeasurement(),
-        weight = allWeights.averageMeasurement()
-    )
+    forEach { objMeasurement ->
+        objMeasurement.getAllMeasurements().forEach { measurement ->
+            objMeasurement._measurements.forEach { (type, meas) ->
+                if (meas == measurement) {
+                    measurementsByType.getOrPut(type) { mutableListOf() }.add(measurement)
+                }
+            }
+        }
+    }
+
+    // Calcular médias por tipo
+    val averagedMeasurements = measurementsByType.mapValues { (_, measurements) ->
+        measurements.averageMeasurement()
+    }.filterValues { it != null }.mapValues { it!! }
+
+    return if (averagedMeasurements.isNotEmpty()) {
+        ObjectMeasurements.fromMap(averagedMeasurements)
+    } else null
 }
 
-/**
- * Filtra medições confiáveis
- */
 fun List<ObjectMeasurements>.filterReliable(threshold: Float = 0.7f): List<ObjectMeasurements> {
-    return filter { measurements ->
-        measurements.getAllMeasurements().any { it.isReliable(threshold) }
-    }
+    return filter { it.getAverageConfidence() >= threshold }
 }
 
-/**
- * Encontra medições com maior confidence média
- */
 fun List<ObjectMeasurements>.mostReliable(): ObjectMeasurements? {
-    return maxByOrNull { measurements ->
-        val allMeasurements = measurements.getAllMeasurements()
-        if (allMeasurements.isNotEmpty()) {
-            allMeasurements.map { it.confidence }.average()
-        } else 0.0
-    }
+    return maxByOrNull { it.getAverageConfidence() }
 }

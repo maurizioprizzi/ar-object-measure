@@ -76,6 +76,8 @@ class ValidateObjectUseCase @Inject constructor() {
                 MeasurementType.HEIGHT, MeasurementType.DISTANCE
             )
             ObjectType.UNKNOWN -> emptyList()
+            // Adicione esta linha:
+            else -> emptyList() // Para qualquer outro tipo não mapeado
         }
     }
 
